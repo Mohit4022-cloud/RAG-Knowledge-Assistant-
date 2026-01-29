@@ -27,12 +27,23 @@ sys.path.insert(0, str(project_root))
 from app.engine import get_chat_engine
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics import (
-    faithfulness,
-    answer_relevancy,
-    context_precision,
-    context_recall
-)
+
+# Import ragas metrics (using new API to avoid deprecation warnings)
+try:
+    from ragas.metrics.collections import (
+        faithfulness,
+        answer_relevancy,
+        context_precision,
+        context_recall
+    )
+except ImportError:
+    # Fallback to old API for older ragas versions
+    from ragas.metrics import (
+        faithfulness,
+        answer_relevancy,
+        context_precision,
+        context_recall
+    )
 
 # Import ragas LlamaIndex integration for custom LLM support
 try:

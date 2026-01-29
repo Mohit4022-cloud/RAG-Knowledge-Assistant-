@@ -86,17 +86,17 @@ def generate_golden_dataset(documents: List[Document], num_questions: int = 20) 
     )
 
     # Initialize dataset generator
+    # Adjust questions per chunk to get approximately num_questions total
+    questions_per_chunk = max(1, num_questions // len(documents))
     dataset_generator = RagDatasetGenerator.from_documents(
         documents,
         llm=llm,
-        num_questions_per_chunk=2,  # Generate multiple questions per chunk
+        num_questions_per_chunk=questions_per_chunk,
         show_progress=True
     )
 
     # Generate the dataset
-    rag_dataset = dataset_generator.generate_questions_from_nodes(
-        num=num_questions
-    )
+    rag_dataset = dataset_generator.generate_questions_from_nodes()
 
     # Convert to our format
     golden_dataset = []

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "eval_001",
+    "question": "What is Retrieval-Augmented Generation (RAG)?",
+    "ground_truth_answer": "Retrieval-Augmented Generation (RAG) is a technique that combines information retrieval with text generation. It retrieves relevant documents from a knowledge base and uses them as context to generate more accurate and grounded responses.",
+    "context_chunk": "RAG combines retrieval and generation by first retrieving relevant documents from a corpus, then using those documents as additional context for a language model to generate responses.",
+    "metadata": {
+      "source_node_id": "sample_001"
+    }
+  },
+  {
+    "id": "eval_002",
+    "question": "What is the purpose of chunking in RAG systems?",
+    "ground_truth_answer": "Chunking breaks down large documents into smaller, manageable pieces that can be efficiently embedded and retrieved. This allows the system to retrieve only the most relevant portions of documents rather than entire documents.",
+    "context_chunk": "Chunking strategies are critical for RAG performance. The optimal chunk size balances between having enough context in each chunk while keeping chunks small enough for precise retrieval.",
+    "metadata": {
+      "source_node_id": "sample_002"
+    }
+  },
+  {
+    "id": "eval_003",
+    "question": "What are embeddings in the context of RAG?",
+    "ground_truth_answer": "Embeddings are vector representations of text that capture semantic meaning. In RAG systems, both document chunks and queries are converted to embeddings, which enables semantic similarity search for retrieving relevant context.",
+    "context_chunk": "Embeddings transform text into high-dimensional vectors where semantically similar texts have vectors that are close together in the embedding space.",
+    "metadata": {
+      "source_node_id": "sample_003"
+    }
+  },
+  {
+    "id": "eval_004",
+    "question": "What is a vector database and why is it used in RAG?",
+    "ground_truth_answer": "A vector database stores embeddings and enables fast similarity search. In RAG systems, vector databases like Qdrant or Pinecone store document embeddings and allow efficient retrieval of the most similar chunks to a query.",
+    "context_chunk": "Vector databases specialize in storing and searching high-dimensional vectors. They use algorithms like HNSW or IVF to enable approximate nearest neighbor search at scale.",
+    "metadata": {
+      "source_node_id": "sample_004"
+    }
+  },
+  {
+    "id": "eval_005",
+    "question": "What is LlamaIndex and what problem does it solve?",
+    "ground_truth_answer": "LlamaIndex is a framework for building RAG applications. It provides tools for document ingestion, chunking, embedding, indexing, and querying, making it easier to connect LLMs with external data sources.",
+    "context_chunk": "LlamaIndex provides a comprehensive toolkit for RAG development, including data connectors, indexing strategies, retrieval methods, and query engines that work with various LLM providers.",
+    "metadata": {
+      "source_node_id": "sample_005"
+    }
+  }
+]
