@@ -28,22 +28,14 @@ from app.engine import get_chat_engine
 from datasets import Dataset
 from ragas import evaluate
 
-# Import ragas metrics (using new API to avoid deprecation warnings)
-try:
-    from ragas.metrics.collections import (
-        faithfulness,
-        answer_relevancy,
-        context_precision,
-        context_recall
-    )
-except ImportError:
-    # Fallback to old API for older ragas versions
-    from ragas.metrics import (
-        faithfulness,
-        answer_relevancy,
-        context_precision,
-        context_recall
-    )
+# Import ragas metrics
+# Note: These are already instantiated metric objects in ragas
+from ragas.metrics import (
+    faithfulness,
+    answer_relevancy,
+    context_precision,
+    context_recall
+)
 
 # Import ragas LlamaIndex integration for custom LLM support
 try:
@@ -87,8 +79,8 @@ def run_evaluation(chat_engine, golden_dataset: List[Dict]) -> pd.DataFrame:
         print(f"[{i}/{len(golden_dataset)}] {question[:60]}...")
 
         try:
-            # Query the chat engine
-            response = chat_engine.query(question)
+            # Query the chat engine (chat engines use .chat() not .query())
+            response = chat_engine.chat(question)
 
             # Extract generated answer
             generated_answer = str(response.response)
@@ -140,6 +132,7 @@ def run_evaluation(chat_engine, golden_dataset: List[Dict]) -> pd.DataFrame:
 
     # Configure ragas to use GLM if available
     print("\nConfiguring ragas metrics...")
+    # These are already instantiated metric objects from ragas.metrics
     metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
 
     if USE_GLM:
