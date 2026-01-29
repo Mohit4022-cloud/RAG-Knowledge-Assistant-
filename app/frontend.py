@@ -180,13 +180,12 @@ if prompt := st.chat_input("Ask a question about your documents..."):
                     cost_per_token = 0.00000001  # $0.01 / 1,000,000 tokens
                     cost = total_tokens * cost_per_token
 
-                    # Display cost and token info
-                    st.write(f"💰 Cost: ${cost:.6f} ({total_tokens} tokens)")
-                    st.caption(f"Input: {input_tokens} tokens | Output: {output_tokens} tokens")
+                    # Store cost info for display outside status container
+                    cost_info = f"💰 Cost: ${cost:.4f} | 📥 Input: {input_tokens} tok | 📤 Output: {output_tokens} tok"
 
                 except Exception as token_error:
-                    # If token extraction fails, just log it and continue
-                    st.caption(f"⚠️ Token tracking unavailable")
+                    # If token extraction fails, set fallback message
+                    cost_info = "⚠️ Cost tracking unavailable"
 
                 # Step 6: Update status to show generation complete
                 status.update(label="✅ Answer Generated", state="complete", expanded=False)
@@ -200,6 +199,10 @@ if prompt := st.chat_input("Ask a question about your documents..."):
                 with st.expander("📚 Sources"):
                     for i, source in enumerate(sources, 1):
                         st.markdown(f"**[{i}]** {source['file']} - Page {source['page']}")
+
+            # Display cost information at bottom of message
+            if 'cost_info' in locals():
+                st.caption(cost_info)
 
             # Step 9: Add assistant message to history
             st.session_state.messages.append({
