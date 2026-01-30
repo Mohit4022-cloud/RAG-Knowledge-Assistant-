@@ -137,17 +137,59 @@ if prompt := st.chat_input("Ask me: 'How was this system architected?'"):
             with st.status("🚀 Processing Query...", expanded=True) as status:
                 # Step 1: Show retrieval phase
                 st.write("🔍 Retrieving Context...")
+                st.write("✨ Generating Response...")
 
-                # Step 2: Get metadata first (for sources and tokens)
-                # Note: We call chat() once to get metadata, then stream separately
+                # Update status
+                status.update(label="✅ Streaming Response...", state="complete", expanded=False)
+
+            # Step 2: Use built-in streaming from ContextChatEngine
+            response_placeholder = st.empty()
+            accumulated_response = ""
+            sources = []
+
+            # Check if streaming is enabled via config
+            import config
+            use_streaming = getattr(config, 'ENABLE_STREAMING', True)
+
+            if use_streaming and hasattr(st.session_state.chat_engine, 'stream_chat'):
+                # Use streaming
+                try:
+                    streaming_response = st.session_state.chat_engine.stream_chat(prompt)
+
+                    # Extract source nodes from streaming response
+                    if hasattr(streaming_response, 'source_nodes') and streaming_response.source_nodes:
+                        for node in streaming_response.source_nodes:
+                            sources.append({
+                                "file": node.metadata.get('file_name', 'Unknown'),
+                                "page": node.metadata.get('page_label', 'N/A')
+                            })
+
+                    # Stream the response with progressive rendering
+                    for chunk in streaming_response.chat_stream:
+                        if hasattr(chunk, 'delta') and chunk.delta:
+                            accumulated_response += chunk.delta
+                            response_placeholder.markdown(accumulated_response)
+
+                except Exception as stream_error:
+                    # Fallback to non-streaming
+                    response = st.session_state.chat_engine.chat(prompt)
+                    accumulated_response = str(response.response)
+                    response_placeholder.markdown(accumulated_response)
+
+                    # Extract sources from non-streaming response
+                    if response.source_nodes:
+                        for node in response.source_nodes:
+                            sources.append({
+                                "file": node.metadata.get('file_name', 'Unknown'),
+                                "page": node.metadata.get('page_label', 'N/A')
+                            })
+            else:
+                # Use non-streaming (fallback or disabled)
                 response = st.session_state.chat_engine.chat(prompt)
-
-                # Extract sources and metrics BEFORE streaming
-                num_chunks = len(response.source_nodes) if response.source_nodes else 0
-                st.write(f"✅ Retrieved {num_chunks} relevant chunks")
+                accumulated_response = str(response.response)
+                response_placeholder.markdown(accumulated_response)
 
                 # Extract sources
-                sources = []
                 if response.source_nodes:
                     for node in response.source_nodes:
                         sources.append({
@@ -155,65 +197,22 @@ if prompt := st.chat_input("Ask me: 'How was this system architected?'"):
                             "page": node.metadata.get('page_label', 'N/A')
                         })
 
-                # Extract token usage (for cost calculation)
-                input_tokens = 0
-                output_tokens = 0
-                total_tokens = 0
+            # Step 3: Calculate cost from accumulated response
+            input_tokens = 0
+            output_tokens = 0
 
-                try:
-                    if hasattr(response, 'raw') and response.raw:
-                        if isinstance(response.raw, dict) and 'usage' in response.raw:
-                            usage = response.raw['usage']
-                            input_tokens = usage.get('prompt_tokens', 0)
-                            output_tokens = usage.get('completion_tokens', 0)
-                            total_tokens = usage.get('total_tokens', 0)
+            # Estimate from word count
+            word_count = len(accumulated_response.split())
+            prompt_words = len(prompt.split())
+            output_tokens = int(word_count * 1.3)
+            input_tokens = int(prompt_words * 1.3)
 
-                    # Fallback: Estimate from word count
-                    if total_tokens == 0:
-                        response_text = str(response.response)
-                        word_count = len(response_text.split())
-                        prompt_words = len(prompt.split())
-                        output_tokens = int(word_count * 1.3)
-                        input_tokens = int(prompt_words * 1.3)
-                        total_tokens = input_tokens + output_tokens
+            # Calculate cost: GLM-4.7 pricing $0.50 input / $1.85 output per 1M tokens
+            input_cost = input_tokens * 0.0000005   # $0.50 / 1,000,000
+            output_cost = output_tokens * 0.00000185  # $1.85 / 1,000,000
+            cost = input_cost + output_cost
 
-                    # Calculate cost: GLM-4.7 pricing $0.50 input / $1.85 output per 1M tokens
-                    input_cost = input_tokens * 0.0000005   # $0.50 / 1,000,000
-                    output_cost = output_tokens * 0.00000185  # $1.85 / 1,000,000
-                    cost = input_cost + output_cost
-
-                    cost_info = f"💰 Cost: ${cost:.6f} | 📥 Input: {input_tokens} tok | 📤 Output: {output_tokens} tok"
-
-                except Exception as token_error:
-                    cost_info = "⚠️ Cost tracking unavailable"
-
-                # Update status
-                status.update(label="✅ Streaming Response...", state="complete", expanded=False)
-
-            # Step 3: Stream the response with progressive rendering
-            response_placeholder = st.empty()
-            accumulated_response = ""
-
-            # Check if streaming is available
-            if hasattr(st.session_state.chat_engine.llm, 'stream_chat'):
-                # Use streaming
-                try:
-                    streaming_response = st.session_state.chat_engine.llm.stream_chat(
-                        st.session_state.chat_engine._memory.get()
-                    )
-
-                    for chunk in streaming_response:
-                        if hasattr(chunk, 'delta') and chunk.delta:
-                            accumulated_response += chunk.delta
-                            response_placeholder.markdown(accumulated_response)
-                except Exception as stream_error:
-                    # Fallback to non-streaming response we already have
-                    accumulated_response = str(response.response)
-                    response_placeholder.markdown(accumulated_response)
-            else:
-                # Use non-streaming response we already have
-                accumulated_response = str(response.response)
-                response_placeholder.markdown(accumulated_response)
+            cost_info = f"💰 Cost: ${cost:.6f} | 📥 Input: {input_tokens} tok | 📤 Output: {output_tokens} tok"
 
             # Step 4: Display sources in expander
             if sources:
@@ -222,8 +221,7 @@ if prompt := st.chat_input("Ask me: 'How was this system architected?'"):
                         st.markdown(f"**[{i}]** {source['file']} - Page {source['page']}")
 
             # Display cost information
-            if 'cost_info' in locals():
-                st.caption(cost_info)
+            st.caption(cost_info)
 
             # Step 5: Add assistant message to history
             st.session_state.messages.append({
