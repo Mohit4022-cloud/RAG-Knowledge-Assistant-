@@ -63,8 +63,19 @@ class GLMLLM(CustomLLM):
 
     @llm_completion_callback()
     def stream_complete(self, prompt: str, **kwargs: Any):
-        """Stream completion - not implemented for now."""
-        raise NotImplementedError("Streaming not implemented yet")
+        """Stream completion using GLM API with fallback."""
+        accumulated_text = ""
+
+        try:
+            for delta in self._call_glm_api_stream([{"role": "user", "content": prompt}]):
+                accumulated_text += delta
+                yield CompletionResponse(text=accumulated_text, delta=delta)
+        except Exception as e:
+            logger.error(f"Streaming failed: {e}")
+            # Fallback to non-streaming
+            logger.info("Falling back to non-streaming completion")
+            response_text = self._call_glm_api([{"role": "user", "content": prompt}])
+            yield CompletionResponse(text=response_text, delta=response_text)
 
     def chat(self, messages, **kwargs):
         """Chat completion using GLM API."""
@@ -85,6 +96,37 @@ class GLMLLM(CustomLLM):
             raw={"content": response_text}
         )
 
+    def stream_chat(self, messages, **kwargs):
+        """Stream chat completion using GLM API with fallback."""
+        from llama_index.core.base.llms.types import ChatMessage, ChatResponse, MessageRole
+
+        # Convert LlamaIndex messages to GLM format
+        glm_messages = []
+        for msg in messages:
+            glm_messages.append({
+                "role": msg.role.value if hasattr(msg.role, 'value') else str(msg.role),
+                "content": msg.content
+            })
+
+        accumulated_text = ""
+
+        try:
+            for delta in self._call_glm_api_stream(glm_messages):
+                accumulated_text += delta
+                yield ChatResponse(
+                    message=ChatMessage(role=MessageRole.ASSISTANT, content=accumulated_text),
+                    delta=delta
+                )
+        except Exception as e:
+            logger.error(f"Streaming chat failed: {e}")
+            # Fallback to non-streaming
+            logger.info("Falling back to non-streaming chat")
+            response_text = self._call_glm_api(glm_messages)
+            yield ChatResponse(
+                message=ChatMessage(role=MessageRole.ASSISTANT, content=response_text),
+                delta=response_text
+            )
+
     def _call_glm_api(self, messages: list) -> str:
         """Make direct HTTP call to GLM API."""
         url = f"{self.api_base}/chat/completions"
@@ -102,6 +144,67 @@ class GLMLLM(CustomLLM):
 
         result = response.json()
         return result["choices"][0]["message"]["content"]
+
+    def _parse_sse_stream(self, response_stream):
+        """
+        Parse Server-Sent Events (SSE) stream from GLM API.
+
+        Yields:
+            str: Individual content deltas from the stream
+        """
+        import json
+
+        for line in response_stream.iter_lines():
+            if not line:
+                continue
+
+            line = line.decode('utf-8')
+
+            # Check for stream end marker
+            if line.strip() == 'data: [DONE]':
+                break
+
+            # Parse SSE format: "data: {json}"
+            if line.startswith('data: '):
+                try:
+                    json_str = line[6:]  # Remove "data: " prefix
+                    chunk = json.loads(json_str)
+
+                    # Extract delta content from GLM API response
+                    if 'choices' in chunk and len(chunk['choices']) > 0:
+                        delta = chunk['choices'][0].get('delta', {})
+                        content = delta.get('content', '')
+                        if content:
+                            yield content
+
+                except json.JSONDecodeError:
+                    # Skip malformed JSON chunks
+                    continue
+
+    def _call_glm_api_stream(self, messages: list):
+        """
+        Make streaming HTTP call to GLM API.
+
+        Yields:
+            str: Content deltas from the streaming response
+        """
+        url = f"{self.api_base}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": True  # Enable streaming
+        }
+
+        response = requests.post(url, headers=headers, json=payload, stream=True)
+        response.raise_for_status()
+
+        # Parse SSE stream
+        for content_delta in self._parse_sse_stream(response):
+            yield content_delta
 
 
 def get_query_engine() -> BaseQueryEngine:

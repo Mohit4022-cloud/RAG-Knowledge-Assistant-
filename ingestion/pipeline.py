@@ -66,7 +66,7 @@ def build_pipeline() -> VectorStoreIndex:
 
     documents = SimpleDirectoryReader(
         input_dir=str(config.DATA_DIR),
-        required_exts=[".pdf"],
+        required_exts=[".pdf", ".md", ".py"],
         recursive=True
     ).load_data()
 

@@ -21,7 +21,7 @@ import config
 
 # Page configuration
 st.set_page_config(
-    page_title="RAG Knowledge Assistant",
+    page_title="Meta RAG Bot",
     page_icon="🤖",
     layout="wide"
 )
@@ -70,15 +70,25 @@ with st.sidebar:
     st.divider()
 
     # Info section
-    with st.expander("ℹ️ About"):
+    with st.expander("🛠️ What I Can Teach You"):
         st.markdown("""
-        **RAG Knowledge Assistant**
+        ### 🔍 My Architecture
+        Ask me about my internal design:
+        - "How does your retrieval work?"
+        - "Explain your hybrid search implementation"
+        - "Show me how you generate embeddings"
 
-        This app uses:
-        - 🤖 GLM-4-Flash LLM
-        - 🔢 HuggingFace Embeddings
-        - 🔍 Hybrid Search (BM25 + Dense)
-        - 📊 Phoenix Observability
+        ### 📝 My Source Code
+        I can explain my own implementation:
+        - "How is the chat engine implemented?"
+        - "Walk me through the ingestion pipeline"
+        - "What does the frontend.py file do?"
+
+        ### 📚 RAG Concepts
+        Learn from the papers I've ingested:
+        - "What is RAG and how does it work?"
+        - "What are best practices for chunking?"
+        - "How do I evaluate a RAG system?"
         """)
 
     # Phoenix link
@@ -87,8 +97,8 @@ with st.sidebar:
 
 
 # Main title
-st.title("💬 RAG Knowledge Assistant")
-st.caption("Ask questions about your documents")
+st.title("💬 Meta RAG Bot")
+st.caption("I am designed to help you learn about RAG systems. I am self-aware and can explain my own source code and architecture.")
 
 # Display chat history
 for message in st.session_state.messages:
@@ -103,7 +113,7 @@ for message in st.session_state.messages:
 
 
 # Chat input
-if prompt := st.chat_input("Ask a question about your documents..."):
+if prompt := st.chat_input("Ask me: 'How was this system architected?'"):
     # Check if engine is loaded
     if not st.session_state.engine_loaded:
         st.error("Chat engine not loaded. Please check your configuration.")
@@ -128,14 +138,15 @@ if prompt := st.chat_input("Ask a question about your documents..."):
                 # Step 1: Show retrieval phase
                 st.write("🔍 Retrieving Context...")
 
-                # Step 2: Call chat engine (blocking, non-streaming)
+                # Step 2: Get metadata first (for sources and tokens)
+                # Note: We call chat() once to get metadata, then stream separately
                 response = st.session_state.chat_engine.chat(prompt)
 
-                # Step 3: Extract retrieval metrics
+                # Extract sources and metrics BEFORE streaming
                 num_chunks = len(response.source_nodes) if response.source_nodes else 0
                 st.write(f"✅ Retrieved {num_chunks} relevant chunks")
 
-                # Step 4: Extract sources from source_nodes
+                # Extract sources
                 sources = []
                 if response.source_nodes:
                     for node in response.source_nodes:
@@ -144,70 +155,80 @@ if prompt := st.chat_input("Ask a question about your documents..."):
                             "page": node.metadata.get('page_label', 'N/A')
                         })
 
-                # Step 5: Extract token usage and calculate cost
+                # Extract token usage (for cost calculation)
                 input_tokens = 0
                 output_tokens = 0
                 total_tokens = 0
-                cost = 0.0
 
                 try:
-                    # Try to extract token usage from response.raw (GLM API response)
                     if hasattr(response, 'raw') and response.raw:
-                        # GLM API returns OpenAI-compatible format with usage object
                         if isinstance(response.raw, dict) and 'usage' in response.raw:
                             usage = response.raw['usage']
                             input_tokens = usage.get('prompt_tokens', 0)
                             output_tokens = usage.get('completion_tokens', 0)
                             total_tokens = usage.get('total_tokens', 0)
-                        # Handle case where raw might be an object with usage attribute
-                        elif hasattr(response.raw, 'usage'):
-                            usage = response.raw.usage
-                            input_tokens = getattr(usage, 'prompt_tokens', 0)
-                            output_tokens = getattr(usage, 'completion_tokens', 0)
-                            total_tokens = getattr(usage, 'total_tokens', 0)
 
-                    # Fallback: Estimate from word count if no usage data available
+                    # Fallback: Estimate from word count
                     if total_tokens == 0:
                         response_text = str(response.response)
-                        # Rough estimation: 1.3 tokens per word
                         word_count = len(response_text.split())
                         prompt_words = len(prompt.split())
                         output_tokens = int(word_count * 1.3)
                         input_tokens = int(prompt_words * 1.3)
                         total_tokens = input_tokens + output_tokens
 
-                    # Calculate cost: GLM-4-Flash pricing $0.01 / 1M tokens
-                    cost_per_token = 0.00000001  # $0.01 / 1,000,000 tokens
-                    cost = total_tokens * cost_per_token
+                    # Calculate cost: GLM-4.7 pricing $0.50 input / $1.85 output per 1M tokens
+                    input_cost = input_tokens * 0.0000005   # $0.50 / 1,000,000
+                    output_cost = output_tokens * 0.00000185  # $1.85 / 1,000,000
+                    cost = input_cost + output_cost
 
-                    # Store cost info for display outside status container
-                    cost_info = f"💰 Cost: ${cost:.4f} | 📥 Input: {input_tokens} tok | 📤 Output: {output_tokens} tok"
+                    cost_info = f"💰 Cost: ${cost:.6f} | 📥 Input: {input_tokens} tok | 📤 Output: {output_tokens} tok"
 
                 except Exception as token_error:
-                    # If token extraction fails, set fallback message
                     cost_info = "⚠️ Cost tracking unavailable"
 
-                # Step 6: Update status to show generation complete
-                status.update(label="✅ Answer Generated", state="complete", expanded=False)
+                # Update status
+                status.update(label="✅ Streaming Response...", state="complete", expanded=False)
 
-            # Step 7: Display complete response (non-streaming)
-            response_text = str(response.response)
-            st.markdown(response_text)
+            # Step 3: Stream the response with progressive rendering
+            response_placeholder = st.empty()
+            accumulated_response = ""
 
-            # Step 8: Display sources in expander (keep existing UI)
+            # Check if streaming is available
+            if hasattr(st.session_state.chat_engine.llm, 'stream_chat'):
+                # Use streaming
+                try:
+                    streaming_response = st.session_state.chat_engine.llm.stream_chat(
+                        st.session_state.chat_engine._memory.get()
+                    )
+
+                    for chunk in streaming_response:
+                        if hasattr(chunk, 'delta') and chunk.delta:
+                            accumulated_response += chunk.delta
+                            response_placeholder.markdown(accumulated_response)
+                except Exception as stream_error:
+                    # Fallback to non-streaming response we already have
+                    accumulated_response = str(response.response)
+                    response_placeholder.markdown(accumulated_response)
+            else:
+                # Use non-streaming response we already have
+                accumulated_response = str(response.response)
+                response_placeholder.markdown(accumulated_response)
+
+            # Step 4: Display sources in expander
             if sources:
                 with st.expander("📚 Sources"):
                     for i, source in enumerate(sources, 1):
                         st.markdown(f"**[{i}]** {source['file']} - Page {source['page']}")
 
-            # Display cost information at bottom of message
+            # Display cost information
             if 'cost_info' in locals():
                 st.caption(cost_info)
 
-            # Step 9: Add assistant message to history
+            # Step 5: Add assistant message to history
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": response_text,
+                "content": accumulated_response,
                 "sources": sources
             })
 
