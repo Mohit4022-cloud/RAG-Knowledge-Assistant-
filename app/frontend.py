@@ -56,7 +56,9 @@ with st.sidebar:
     if st.session_state.engine_loaded:
         st.success("✅ Connected to Qdrant")
         st.caption(f"Collection: {config.COLLECTION_NAME}")
-        st.caption(f"Model: {config.LLM_MODEL}")
+        # Capitalize model name for display
+        model_display_name = config.LLM_MODEL.upper() if config.LLM_MODEL == "glm-4.7" else config.LLM_MODEL
+        st.caption(f"Model: {model_display_name}")
     else:
         st.error("❌ Not connected to Qdrant")
 
@@ -70,22 +72,30 @@ with st.sidebar:
     st.divider()
 
     # Info section
-    with st.expander("🛠️ What I Can Teach You"):
+    with st.expander("🛠️ What I Can Answer"):
         st.markdown("""
-        ### 🔍 My Architecture
-        Ask me about my internal design:
-        - "How does your retrieval work?"
-        - "Explain your hybrid search implementation"
-        - "Show me how you generate embeddings"
+        ### 💼 Business Justification
+        Ask me about economics and TCO:
+        - "Why did you choose GLM-4.7 over GPT-5.2?"
+        - "What's the ROI of RAG vs fine-tuning?"
+        - "Why Qdrant instead of Pinecone?"
+        - "How much does this system cost to run?"
 
-        ### 📝 My Source Code
-        I can explain my own implementation:
-        - "How is the chat engine implemented?"
-        - "Walk me through the ingestion pipeline"
-        - "What does the frontend.py file do?"
+        ### 🔍 Architecture & SLAs
+        Ask me about implementation and performance:
+        - "What's your retrieval latency (P95/P99)?"
+        - "How does hybrid search work?"
+        - "Can this scale to 100K queries/day?"
+        - "What's your vendor independence strategy?"
+
+        ### 📊 Cost & OpEx Forecasting
+        Ask me about financial planning:
+        - "What's the 3-year TCO projection?"
+        - "How do costs scale with query volume?"
+        - "What's the payback period?"
 
         ### 📚 RAG Concepts
-        Learn from the papers I've ingested:
+        Learn from the research papers:
         - "What is RAG and how does it work?"
         - "What are best practices for chunking?"
         - "How do I evaluate a RAG system?"
@@ -97,8 +107,8 @@ with st.sidebar:
 
 
 # Main title
-st.title("💬 Meta RAG Bot")
-st.caption("I am designed to help you learn about RAG systems. I am self-aware and can explain my own source code and architecture.")
+st.title("💬 Meta RAG Enterprise Assistant")
+st.caption("I demonstrate enterprise-grade RAG architecture with 83.7% cost savings (vs GPT-5.2) and full business justification for every decision. Ask me about TCO, SLAs, or vendor independence!")
 
 # Display chat history
 for message in st.session_state.messages:
